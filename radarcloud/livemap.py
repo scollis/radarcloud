@@ -10,10 +10,13 @@ plot a radar with obs
 
 #First out imports
 #Lets import some stuff!
+from matplotlib import use
+use('agg')
 from datetime import datetime, timedelta
 import os
 import tempfile
 import sys
+import boto3
 from boto.s3.connection import S3Connection
 import cartopy
 import matplotlib.patheffects as mpatheffects
@@ -279,7 +282,7 @@ def radar_plus_obs(station, my_datetime, radar_title=None, bb=None,
                               fontsize=12)
     station_layout.plot(stationplot, sfc_data)
 
-    return display
+    return display, time_at_start_of_radar
 
 if __name__ == "__main__":
     disptype = sys.argv[1]
@@ -294,9 +297,19 @@ if __name__ == "__main__":
         layout.add_symbol('C', 'cloud_coverage', sky_cover, clip_on=True)
         layout.add_symbol('W', 'present_weather', current_weather, clip_on=True)
 
-        bb = {'west':-78.5, 'east':-75.0,'north':39, 'south':37}
-        display = radar_plus_obs('KILX', datetime.utcnow(), radar_title = 'KLWX ',
+        bb = {'west':-79.5, 'east':-75.0,'north':40, 'south':37}
+        display, tas = radar_plus_obs('KLWX', datetime.utcnow(), radar_title = 'KLWX ',
                                  station_radius=20000., station_layout=layout,
                                 field = 'reflectivity', vmin=-12, vmax=64, bb=bb)
         display.ax.add_feature(cartopy.feature.LAKES, zorder=0)
-        plt.savefig('/home/ubuntu/cpz.png')
+        fancy_date_string = tas.strftime('/home/ubuntu/KLWX_%Y%m%d_%H%M.png')
+        lfds = tas.strftime('KLWX_%Y%m%d_%H%M.png')
+        plt.savefig(fancy_date_string)
+        my_s3 = boto3.resource('s3')
+        data = open(fancy_date_string, 'rb')
+        my_s3.Bucket('liveradar').put_object(Key=lfds, Body=data)
+        data.close()
+        new_data = open(fancy_date_string, 'rb')
+        my_s3.Bucket('liveradar').put_object(Key='KLWX_latest.png', Body=new_data)
+        new_data.close()
+
